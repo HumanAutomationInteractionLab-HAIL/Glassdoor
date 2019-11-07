@@ -1,0 +1,152 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Nov  6 18:42:53 2019
+
+@author: prakr
+"""
+
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+import urllib.request
+import re
+
+from datetime import datetime
+from dateutil import parser
+from fake_useragent import UserAgent
+import time
+import random
+ua = UserAgent()
+
+#declaring lits that will be columns in the csv file
+dateObject=[] 
+Review_Heading = []
+Employment_Status = []
+Employment_Tenure = []
+Pros = []
+Cons = []
+AdvicetoMngt = []
+Overall_Rating = []
+wlb = [] #Work/Life Balance, , Career Opportunities, ,
+cv = []  #Culture & Values
+co = []  #Career Opportunities
+coben = []  #Compensation and Benefits
+sm = []  #Senior Management
+rec = []  #Reccomend, Outlook, Approves CEO
+temp=[]
+wcount=cvcount=cocount=cobencount=smcount=0
+
+for j in range (1,500):
+    if(j!=1):
+        url = 'https://www.glassdoor.com/Reviews/Walmart-Reviews-E715_P'+str(j)+'.htm?countryRedirect=true'
+    else:
+        url='https://www.glassdoor.com/Reviews/Walmart-Reviews-E715.htm?countryRedirect=true'
+    html_text = requests.get(url,headers={'User-Agent': ua.random}).text
+    head = {}
+    bs = BeautifulSoup(html_text,'lxml')
+    for i in bs.find_all('div',{'class':'hreview'}):
+        #Fetching the date
+        D = i.find('time',{'class':'date subtle small'}) 
+        if(D!= None):
+            D = i.find('time',{'class':'date subtle small'})['datetime']
+        else:
+            continue
+        temp=datetime.strptime(D[4:15],'%b %d %Y').date() #creating the date object (time not included)
+        temp.strftime('%x %X') #changing it to excel compatible form
+        dateObject.append(temp)
+        #Review heading/Summary
+        Review_Heading.append(i.find('h2',{'class':'h2 summary strong mt-0 mb-xsm'}).text)
+        #Employee Status, Current title and location
+        Employment_Status.append(i.find('div',{'class':'author minor'}).text)
+        #full-time/part-time and the no of years
+        Employment_Tenure.append(i.find('p',{'class':'mainText mb-0'}).text)
+        #Reviews: Pros, Cons and Advice to Management
+        proscons = i.find_all('div',{'class':'mt-md common__EiReviewTextStyles__allowLineBreaks'})
+        for p in proscons:        
+            if (p.text[:6] == "Advice"):
+                AdvicetoMngt.append(p.text[20:])
+            else:
+                if (p.text[:4] == "Pros"):
+                    Pros.append(p.text[4:])
+                else:
+                    Cons.append(p.text[4:])
+        
+        #recommends/outlook/Approve CEO
+        review=""
+        for res in i.find_all('div',{'class':'col-sm-4'}):
+            review = review + " " + res.span.text
+        rec.append(review)
+        review = ""
+        
+        #Overall Rating           
+        res = i.find('div',{'class':'mr-xsm d-lg-inline-block'})
+        res2 = res.find('span',{'class': 'value-title'})
+        res2 = str(res2)
+        rat = float(res2[33:36])
+        Overall_Rating.append(rat)
+        
+        #Sub-ratings(Work/Life Balance, Culture & Values, Career Opportunities, Compensation and Benefits,Senior Management)
+
+        '''
+        reinitialise the counters, so that every review can be checked
+        if they have the values or not
+        
+        '''
+        wcount=0
+        cvcount=0
+        cocount=0
+        cobencount=0
+        smcount=0
+        for li in i.find_all('li'):
+            #print("\n")
+            #print(listr)
+        
+            if(li.find('div',{'class':'minor'}) == None):
+                break
+            else:   
+                a = li.find('div',{'class':'minor'}).text
+                if (a == "Work/Life Balance"):
+                    rat = li.span['title']
+                    wlb.append(rat)
+                    wcount = 1
+                if (a == "Culture & Values"):
+                    rat = li.span['title']
+                    cv.append(rat)
+                    cvcount = 1
+                if (a == "Career Opportunities"):
+                    rat = li.span['title']
+                    co.append(rat)
+                    cocount = 1
+                if (a == "Compensation and Benefits"):
+                    rat = li.span['title']
+                    coben.append(rat)
+                    cobencount = 1
+                if (a == "Senior Management"):
+                    rat = li.span['title']
+                    sm.append(rat)
+                    smcount = 1
+        
+        if (wcount == 0):
+            wlb.append("")
+        if (cvcount == 0):
+            cv.append("")
+        if (cocount == 0):
+            co.append("")
+        if (cobencount == 0):
+            coben.append("")
+        if (smcount == 0):
+            sm.append("") 
+
+#creating a pandas dataframe from all the lists(to-be-columns)
+cols = {'Date': dateObject, 'Review_Heading': Review_Heading, 'Employment_Status': Employment_Status, 
+        'Employment_Tenure': Employment_Tenure,'Pros': Pros, 'Cons': Cons,'AdvicetoMngt': AdvicetoMngt,
+        'Recommends': rec,'Overall Rating': Overall_Rating, 'Work/Life Balance': wlb, 'Culture & Values': cv, 
+        'Career Opportunities': co, 'Comp & Ben': coben, 'Senior Management': sm}
+df = pd.DataFrame().from_dict(cols,orient='index')
+df = df.T
+
+#importing the data to csv file
+export_csv = df.to_csv (r'C:\Users\prakr\OneDrive\Prakriti\MS BA\Research\Data\WalmartRaw.csv', index = None, header=True)  
+
+       
+    
